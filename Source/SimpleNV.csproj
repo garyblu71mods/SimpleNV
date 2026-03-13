@@ -1,6 +1,6 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="TUFX.version.props" />
+  <Import Project="SimpleNV.version.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <RootNamespace>KerbVisionIR</RootNamespace>
@@ -9,13 +9,13 @@
     <DefineConstants>UNITY_STANDALONE, UNITY_2017_1_OR_NEWER, UNITY_2017_2_OR_NEWER, UNITY_2017_3_OR_NEWER, UNITY_2018_1_OR_NEWER, UNITY_2018_2_OR_NEWER, UNITY_2018_3_OR_NEWER, UNITY_2019_1_OR_NEWER, UNITY_2019_2_OR_NEWER, UNITY_2019_3_OR_NEWER, ENABLE_VR_MODULE, ENABLE_VR</DefineConstants>
   </PropertyGroup>
   <PropertyGroup>
-    <BinariesOutputRelativePath>GameData\KerbVisionIR\Plugins</BinariesOutputRelativePath>
+    <BinariesOutputRelativePath>GameData\SimpleNV\Plugins</BinariesOutputRelativePath>
     <GenerateKSPAssemblyAttribute>true</GenerateKSPAssemblyAttribute>
     <GenerateKSPAssemblyDependencyAttributes>true</GenerateKSPAssemblyDependencyAttributes>
   </PropertyGroup>
   <ItemGroup>
-    <KSPVersionFile Include="$(RepoRootPath)\GameData\TUFX\TUFX.version">
-      <Destination>$(RepoRootPath)\GameData\TUFX\TUFX.version</Destination>
+    <KSPVersionFile Include="$(RepoRootPath)\GameData\SimpleNV\SimpleNV.version">
+      <Destination>$(RepoRootPath)\GameData\SimpleNV\SimpleNV.version</Destination>
       <KSP_Version_Min>1.12.3</KSP_Version_Min>
     </KSPVersionFile>
   </ItemGroup>
@@ -40,7 +40,7 @@
     </None>
     <None Include="PostProcessing\.editorconfig" />
     <None Include="PostProcessing\Unity.Postprocessing.Runtime.asmdef" />
-    <None Include="TUFX.csproj.user" />
+    <None Include="SimpleNV.csproj.user" />
   </ItemGroup>
   <ItemGroup>
     <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />
