@@ -1,0 +1,31 @@
+# Visual Studio
+.vs/
+.vscode/
+*.sln.DotSettings
+
+# Build artifacts
+bin/
+obj/
+Releases/
+
+# User-specific files
+*.user
+*.userprefs
+*.suo
+
+# NuGet
+packages/
+.nuget/
+
+# KSP-specific
+GameData/TUFX/Plugins/
+GameData/KerbVisionIR/Plugins/*.dll
+GameData/KerbVisionIR/Plugins/*.pdb
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+*.csproj.user
+.idea/
