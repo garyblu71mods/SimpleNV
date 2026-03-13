@@ -25,7 +25,7 @@ namespace TUFX
 	/// The main KSPAddon that holds profile loading and handling logic, resource reference storage,
 	/// provides the public functions to update and enable profiles, and manages ApplicationLauncher button and GUI spawning.
 	/// </summary>
-	[KSPAddon(KSPAddon.Startup.Instantly, true)]
+	// [KSPAddon(KSPAddon.Startup.Instantly, true)]
 	public class TexturesUnlimitedFXLoader : MonoBehaviour
 	{
 
