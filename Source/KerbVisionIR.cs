@@ -4,17 +4,17 @@ using UnityEngine;
 using UnityEngine.Rendering.PostProcessing;
 using System.Reflection;
 
-namespace KerbVisionIR
+namespace SimpleNV
 {
     /// <summary>
-    /// Main controller for KerbVisionIR night vision mod
+    /// Main controller for SimpleNV night vision mod
     /// Hotkey: Alt + ` (backtick) to toggle
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
-    public class KerbVisionIRController : MonoBehaviour
+    public class SimpleNVController : MonoBehaviour
     {
         // Singleton instance
-        public static KerbVisionIRController Instance { get; private set; }
+        public static SimpleNVController Instance { get; private set; }
 
         // PostProcessing components
         private PostProcessLayer layer;
@@ -60,7 +60,7 @@ namespace KerbVisionIR
             }
             Instance = this;
             
-            Debug.Log("[KerbVisionIR] Controller created");
+            Debug.Log("[SimpleNV] Controller created");
         }
 
         void Start()
@@ -68,14 +68,14 @@ namespace KerbVisionIR
             try
             {
                 InitializePostProcessing();
-                Debug.Log("[KerbVisionIR] Initialization complete - Press Alt+` to toggle");
+                Debug.Log("[SimpleNV] Initialization complete - Press Alt+` to toggle");
                 // Load persisted binding
-                boundToggleKey = (KeyCode)PlayerPrefs.GetInt("KerbVisionIR_BoundToggleKey", (int)KeyCode.BackQuote);
-                requireAltForBoundKey = PlayerPrefs.GetInt("KerbVisionIR_RequireAlt", 1) == 1;
+                boundToggleKey = (KeyCode)PlayerPrefs.GetInt("SimpleNV_BoundToggleKey", (int)KeyCode.BackQuote);
+                requireAltForBoundKey = PlayerPrefs.GetInt("SimpleNV_RequireAlt", 1) == 1;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[KerbVisionIR] Initialization failed: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError($"[SimpleNV] Initialization failed: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -99,9 +99,9 @@ namespace KerbVisionIR
                     {
                         boundToggleKey = kcode;
                         capturingKey = false;
-                        PlayerPrefs.SetInt("KerbVisionIR_BoundToggleKey", (int)boundToggleKey);
+                        PlayerPrefs.SetInt("SimpleNV_BoundToggleKey", (int)boundToggleKey);
                         PlayerPrefs.Save();
-                        Debug.Log($"[KerbVisionIR] Bound toggle key to: {boundToggleKey}");
+                        Debug.Log($"[SimpleNV] Bound toggle key to: {boundToggleKey}");
                         break;
                     }
                 }
@@ -110,14 +110,14 @@ namespace KerbVisionIR
 
         void OnGUI()
         {
-            guiWindowRect = GUILayout.Window(10101, guiWindowRect, GuiWindow, "KerbVisionIR");
+            guiWindowRect = GUILayout.Window(10101, guiWindowRect, GuiWindow, "SimpleNV");
         }
 
         void GuiWindow(int id)
         {
             GUILayout.BeginVertical();
 
-            GUILayout.Label($"Mod: KerbVisionIR");
+            GUILayout.Label($"Mod: SimpleNV");
 
             // Last modification date of this assembly
             try
@@ -160,7 +160,7 @@ namespace KerbVisionIR
             if (newRequireAlt != requireAltForBoundKey)
             {
                 requireAltForBoundKey = newRequireAlt;
-                PlayerPrefs.SetInt("KerbVisionIR_RequireAlt", requireAltForBoundKey ? 1 : 0);
+                PlayerPrefs.SetInt("SimpleNV_RequireAlt", requireAltForBoundKey ? 1 : 0);
                 PlayerPrefs.Save();
             }
             GUILayout.EndHorizontal();
@@ -172,7 +172,7 @@ namespace KerbVisionIR
 
         void OnDestroy()
         {
-            Debug.Log("[KerbVisionIR] Cleanup started");
+            Debug.Log("[SimpleNV] Cleanup started");
 
             // Disable effect before cleanup
             if (isEffectActive)
@@ -189,7 +189,7 @@ namespace KerbVisionIR
             RestoreLighting();
 
             Instance = null;
-            Debug.Log("[KerbVisionIR] Cleanup complete");
+            Debug.Log("[SimpleNV] Cleanup complete");
         }
 
         #endregion
@@ -202,11 +202,11 @@ namespace KerbVisionIR
             Camera mainCamera = Camera.main;
             if (mainCamera == null)
             {
-                Debug.LogError("[KerbVisionIR] Camera.main is null!");
+                Debug.LogError("[SimpleNV] Camera.main is null!");
                 return;
             }
 
-            Debug.Log($"[KerbVisionIR] Found camera: {mainCamera.name}");
+            Debug.Log($"[SimpleNV] Found camera: {mainCamera.name}");
 
             // Load TUFX shader resources FIRST
             LoadShaderResources();
@@ -220,15 +220,15 @@ namespace KerbVisionIR
                 layer.volumeLayer = -1; // All layers
                 layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
                 layer.stopNaNPropagation = true;
-                Debug.Log("[KerbVisionIR] Created PostProcessLayer");
+                Debug.Log("[SimpleNV] Created PostProcessLayer");
             }
             else
             {
-                Debug.Log("[KerbVisionIR] Using existing PostProcessLayer");
+                Debug.Log("[SimpleNV] Using existing PostProcessLayer");
             }
 
             // Create global PostProcessVolume
-            GameObject volumeGO = new GameObject("KerbVisionIR_PostProcessVolume");
+            GameObject volumeGO = new GameObject("SimpleNV_PostProcessVolume");
             volume = volumeGO.AddComponent<PostProcessVolume>();
             volume.isGlobal = true;
             volume.priority = 100f; // High priority
@@ -241,7 +241,7 @@ namespace KerbVisionIR
             // Store original lighting
             StoreLighting();
 
-            Debug.Log("[KerbVisionIR] PostProcessing setup complete");
+            Debug.Log("[SimpleNV] PostProcessing setup complete");
         }
 
         void LoadShaderResources()
@@ -250,7 +250,7 @@ namespace KerbVisionIR
             string[] possiblePaths = new string[]
             {
                 Path.Combine(KSPUtil.ApplicationRootPath, "GameData/TUFX/Shaders/tufx-universal.ssf"),
-                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/KerbVisionIR/Shaders/kerbvision-pp.ssf")
+                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/SimpleNV/Shaders/simplenV-pp.ssf")
             };
 
             foreach (string path in possiblePaths)
@@ -262,24 +262,24 @@ namespace KerbVisionIR
                         var bundle = AssetBundle.LoadFromFile(path);
                         if (bundle != null)
                         {
-                            Debug.Log($"[KerbVisionIR] Loaded shader bundle from: {path}");
+                            Debug.Log($"[SimpleNV] Loaded shader bundle from: {path}");
                             return;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[KerbVisionIR] Failed to load shader bundle: {ex.Message}");
+                        Debug.LogError($"[SimpleNV] Failed to load shader bundle: {ex.Message}");
                     }
                 }
             }
 
-            Debug.LogWarning("[KerbVisionIR] No shader bundle found - effects may not work!");
+            Debug.LogWarning("[SimpleNV] No shader bundle found - effects may not work!");
         }
 
         void CreateEffectProfile()
         {
             profile = ScriptableObject.CreateInstance<PostProcessProfile>();
-            profile.name = "KerbVisionIR_Profile";
+            profile.name = "SimpleNV_Profile";
 
             // === VIGNETTE EFFECT ===
             vignette = profile.AddSettings<Vignette>();
@@ -293,7 +293,7 @@ namespace KerbVisionIR
             vignette.roundness.Override(1f);
             vignette.rounded.Override(false);
 
-            Debug.Log("[KerbVisionIR] Vignette added to profile");
+            Debug.Log("[SimpleNV] Vignette added to profile");
 
             // === COLOR GRADING EFFECT ===
             colorGrading = profile.AddSettings<ColorGrading>();
@@ -310,7 +310,7 @@ namespace KerbVisionIR
             colorGrading.brightness.Override(0f);
             colorGrading.contrast.Override(0f); // Start neutral
 
-            Debug.Log("[KerbVisionIR] ColorGrading added to profile");
+            Debug.Log("[SimpleNV] ColorGrading added to profile");
         }
 
         #endregion
@@ -325,21 +325,21 @@ namespace KerbVisionIR
             {
                 EnableEffect();
                 ScreenMessages.PostScreenMessage(
-                    $"<color=lime>[Night Vision] ON - Mode: {currentMode}</color>", 
+                    $"<color=lime>[SimpleNV] ON - Mode: {currentMode}</color>", 
                     3f, 
                     ScreenMessageStyle.UPPER_CENTER
                 );
-                Debug.Log($"[KerbVisionIR] Effect ENABLED - Mode: {currentMode}, Brightness: {brightnessMultiplier}x");
+                Debug.Log($"[SimpleNV] Effect ENABLED - Mode: {currentMode}, Brightness: {brightnessMultiplier}x");
             }
             else
             {
                 DisableEffect();
                 ScreenMessages.PostScreenMessage(
-                    "<color=red>[Night Vision] OFF</color>", 
+                    "<color=red>[SimpleNV] OFF</color>", 
                     2f, 
                     ScreenMessageStyle.UPPER_CENTER
                 );
-                Debug.Log("[KerbVisionIR] Effect DISABLED");
+                Debug.Log("[SimpleNV] Effect DISABLED");
             }
         }
 
@@ -347,7 +347,7 @@ namespace KerbVisionIR
         {
             if (vignette == null || colorGrading == null)
             {
-                Debug.LogError("[KerbVisionIR] Effects not initialized!");
+                Debug.LogError("[SimpleNV] Effects not initialized!");
                 return;
             }
 
@@ -388,9 +388,9 @@ namespace KerbVisionIR
             // Cycle through modes
             currentMode = (VisionMode)(((int)currentMode + 1) % Enum.GetValues(typeof(VisionMode)).Length);
             
-            Debug.Log($"[KerbVisionIR] Mode changed to: {currentMode}");
+            Debug.Log($"[SimpleNV] Mode changed to: {currentMode}");
             ScreenMessages.PostScreenMessage(
-                $"<color=lime>[NV Mode] {currentMode}</color>", 
+                $"<color=lime>[SimpleNV] {currentMode}</color>", 
                 2f, 
                 ScreenMessageStyle.UPPER_CENTER
             );
@@ -431,7 +431,7 @@ namespace KerbVisionIR
                 storedAmbientLight = RenderSettings.ambientLight;
                 storedAmbientIntensity = RenderSettings.ambientIntensity;
                 lightingStored = true;
-                Debug.Log($"[KerbVisionIR] Stored lighting: {storedAmbientLight}, intensity: {storedAmbientIntensity}");
+            Debug.Log($"[SimpleNV] Stored lighting: {storedAmbientLight}, intensity: {storedAmbientIntensity}");
             }
         }
 
@@ -441,7 +441,7 @@ namespace KerbVisionIR
             {
                 RenderSettings.ambientLight = storedAmbientLight * brightnessMultiplier;
                 RenderSettings.ambientIntensity = storedAmbientIntensity * brightnessMultiplier;
-                Debug.Log($"[KerbVisionIR] Applied brightness boost: {brightnessMultiplier}x");
+                Debug.Log($"[SimpleNV] Applied brightness boost: {brightnessMultiplier}x");
             }
         }
 
@@ -451,7 +451,7 @@ namespace KerbVisionIR
             {
                 RenderSettings.ambientLight = storedAmbientLight;
                 RenderSettings.ambientIntensity = storedAmbientIntensity;
-                Debug.Log("[KerbVisionIR] Restored original lighting");
+                Debug.Log("[SimpleNV] Restored original lighting");
             }
         }
 
