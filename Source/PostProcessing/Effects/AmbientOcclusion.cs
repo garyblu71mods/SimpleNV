@@ -177,20 +177,27 @@ namespace UnityEngine.Rendering.PostProcessing
 
                 if (context != null)
                 {
-                    state &= context.resources.shaders.scalableAO
-                        && context.resources.shaders.scalableAO.isSupported;
+                    var resources = context.resources;
+                    state &= resources != null
+                        && resources.shaders != null
+                        && resources.shaders.scalableAO != null
+                        && resources.shaders.scalableAO.isSupported;
                 }
             }
             else if (mode.value == AmbientOcclusionMode.MultiScaleVolumetricObscurance)
             {
                 if (context != null)
                 {
-                    state &= context.resources.shaders.multiScaleAO
-                        && context.resources.shaders.multiScaleAO.isSupported
-                        && context.resources.computeShaders.multiScaleAODownsample1
-                        && context.resources.computeShaders.multiScaleAODownsample2
-                        && context.resources.computeShaders.multiScaleAORender
-                        && context.resources.computeShaders.multiScaleAOUpsample;
+                    var resources = context.resources;
+                    state &= resources != null
+                        && resources.shaders != null
+                        && resources.computeShaders != null
+                        && resources.shaders.multiScaleAO != null
+                        && resources.shaders.multiScaleAO.isSupported
+                        && resources.computeShaders.multiScaleAODownsample1 != null
+                        && resources.computeShaders.multiScaleAODownsample2 != null
+                        && resources.computeShaders.multiScaleAORender != null
+                        && resources.computeShaders.multiScaleAOUpsample != null;
                 }
 
                 state &= SystemInfo.supportsComputeShaders

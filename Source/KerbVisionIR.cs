@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using KSP.UI.Screens;
 using ToolbarControl_NS;
@@ -24,7 +25,11 @@ namespace KerbVisionIR
         private PostProcessProfile profile;
         private Camera targetCamera;
         private bool postProcessingAvailable = false;
-        
+        private PostProcessResources runtimeResources;
+
+        private readonly Dictionary<string, Shader> loadedShaders = new Dictionary<string, Shader>();
+        private readonly Dictionary<string, ComputeShader> loadedComputeShaders = new Dictionary<string, ComputeShader>();
+
         // Effect references
         private Vignette vignette;
         private ColorGrading colorGrading;
@@ -42,17 +47,21 @@ namespace KerbVisionIR
         private const float MaxBrightnessMultiplier = 4.0f;
         private const float FallbackTintStrength = 0.85f;
         private bool vignetteEnabled = true;
-        private bool grainEnabled = true;
+        private bool grainEnabled = false;
         private bool scanlinesEnabled = true;
         private float vignetteIntensity = 0.45f;
-        private float grainIntensity = 0.22f;
+        private float grainIntensity = 0.12f;
         private float scanlineIntensity = 0.18f;
+        private float colorTintStrength = 1.0f;
         private const float MinVignetteIntensity = 0f;
         private const float MaxVignetteIntensity = 0.8f;
         private const float MinGrainIntensity = 0f;
-        private const float MaxGrainIntensity = 0.5f;
+        private const float MaxGrainIntensity = 0.35f;
         private const float MinScanlineIntensity = 0f;
         private const float MaxScanlineIntensity = 0.45f;
+        private const float MinColorTintStrength = 0f;
+        private const float MaxColorTintStrength = 1f;
+        private const float MinPersistentColorTint = 0.35f;
         private float lastToggleTime = -10f;
         private const float ToggleCooldownSeconds = 0.25f;
         private bool transitionActive = false;
@@ -73,6 +82,7 @@ namespace KerbVisionIR
 
         // Toolbar
         private const string ToolbarModId = "SimpleNV";
+        private const int EffectLayer = 31;
         private ToolbarControl toolbarControl;
         private bool showWindow = false;
         private bool toolbarReady = false;
@@ -131,11 +141,12 @@ namespace KerbVisionIR
                 brightnessMultiplier = Mathf.Clamp(brightnessMultiplier, MinBrightnessMultiplier, MaxBrightnessMultiplier);
                 currentMode = (VisionMode)PlayerPrefs.GetInt("KerbVisionIR_Mode", (int)VisionMode.GreenNV);
                 vignetteEnabled = PlayerPrefs.GetInt("KerbVisionIR_VignetteEnabled", 1) == 1;
-                grainEnabled = PlayerPrefs.GetInt("KerbVisionIR_GrainEnabled", 1) == 1;
+                grainEnabled = PlayerPrefs.GetInt("KerbVisionIR_GrainEnabled", 0) == 1;
                 vignetteIntensity = Mathf.Clamp(PlayerPrefs.GetFloat("KerbVisionIR_VignetteIntensity", 0.45f), MinVignetteIntensity, MaxVignetteIntensity);
-                grainIntensity = Mathf.Clamp(PlayerPrefs.GetFloat("KerbVisionIR_GrainIntensity", 0.22f), MinGrainIntensity, MaxGrainIntensity);
+                grainIntensity = Mathf.Clamp(PlayerPrefs.GetFloat("KerbVisionIR_GrainIntensity", 0.12f), MinGrainIntensity, MaxGrainIntensity);
                 scanlinesEnabled = PlayerPrefs.GetInt("KerbVisionIR_ScanlinesEnabled", 1) == 1;
                 scanlineIntensity = Mathf.Clamp(PlayerPrefs.GetFloat("KerbVisionIR_ScanlineIntensity", 0.18f), MinScanlineIntensity, MaxScanlineIntensity);
+                colorTintStrength = Mathf.Clamp(PlayerPrefs.GetFloat("KerbVisionIR_ColorTintStrength", 1.0f), MinColorTintStrength, MaxColorTintStrength);
 
                 InitializeAudio();
                 InitializeToolbar();
@@ -149,15 +160,29 @@ namespace KerbVisionIR
 
         void Update()
         {
+            if (MapView.MapIsEnabled)
+            {
+                if (isEffectActive || transitionActive)
+                {
+                    transitionActive = false;
+                    transitionBlend = 0f;
+                    transitionOverlayAlpha = 0f;
+                    transitionNoiseBoost = 0f;
+                    isEffectActive = false;
+                    DisableEffect();
+                }
+                return;
+            }
+
             if (transitionActive)
             {
                 UpdateTransition(Time.unscaledDeltaTime);
             }
 
-             if (postProcessingAvailable)
-             {
-                 EnsureActiveCameraLayer();
-             }
+            if (postProcessingAvailable)
+            {
+                EnsureActiveCameraLayer();
+            }
 
             // Hotkey detection: user-configurable
             if (!capturingKey && boundToggleKey != KeyCode.None && Input.GetKeyDown(boundToggleKey))
@@ -193,12 +218,13 @@ namespace KerbVisionIR
                 }
                 else
                 {
-                    ApplyBrightnessBoost();
                     if (grainEnabled && Time.frameCount - fallbackGrainFrame > 3)
                     {
                         CreateFallbackGrainTexture();
                     }
                 }
+
+                ApplyBrightnessBoost();
             }
         }
 
@@ -206,16 +232,46 @@ namespace KerbVisionIR
         {
             DrawTransitionOverlay();
 
-             if (isEffectActive && !postProcessingAvailable)
-             {
-                 DrawFallbackEffectOverlay();
-             }
+            if (isEffectActive)
+            {
+                DrawColorUnderlay();
+            }
 
-             if (showWindow)
-             {
-                 guiWindowRect = GUILayout.Window(10101, guiWindowRect, GuiWindow, "KerbVisionIR");
-             }
-         }
+            if (isEffectActive && !postProcessingAvailable)
+            {
+                DrawFallbackEffectOverlay();
+            }
+
+            if (showWindow)
+            {
+                guiWindowRect = GUILayout.Window(10101, guiWindowRect, GuiWindow, "KerbVisionIR");
+            }
+        }
+
+        void DrawColorUnderlay()
+        {
+            if (fallbackWhiteTexture == null || !isEffectActive)
+                return;
+
+            int prevDepth = GUI.depth;
+            Color prevColor = GUI.color;
+
+            GUI.depth = 9999;
+
+            if (scanlinesEnabled && fallbackScanlineTexture != null)
+            {
+                float lineAlpha = Mathf.Clamp01(scanlineIntensity * 0.85f * GetEffectBlend());
+                if (lineAlpha > 0.001f)
+                {
+                    GUI.color = new Color(0f, 0f, 0f, lineAlpha);
+                    float vRepeat = Screen.height / 2f;
+                    GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackScanlineTexture, new Rect(0f, 0f, 1f, vRepeat), true);
+                }
+            }
+
+            GUI.color = prevColor;
+            GUI.depth = prevDepth;
+        }
 
         void GuiWindow(int id)
         {
@@ -291,6 +347,7 @@ namespace KerbVisionIR
                 if (isEffectActive)
                     EnforceActiveEffectState();
                 Debug.Log($"[KerbVisionIR] Grain toggled: {(grainEnabled ? "ON" : "OFF")}");
+
             }
 
             if (GUILayout.Button($"Scanlines: {(scanlinesEnabled ? "ON" : "OFF")}", GUILayout.Height(24), GUILayout.ExpandWidth(true)))
@@ -323,11 +380,20 @@ namespace KerbVisionIR
             }
 
             GUILayout.Label($"Scanline Strength: {scanlineIntensity:0.00}");
-            float newScanlineIntensity = GUILayout.HorizontalSlider(scanlineIntensity, MinScanlineIntensity, MaxScanlineIntensity);
+            float newScanlineIntensity = GUILayout.HorizontalSlider(scanlineIntensity, MinScanlineIntensity, MaxColorTintStrength);
             if (Mathf.Abs(newScanlineIntensity - scanlineIntensity) > 0.001f)
             {
                 scanlineIntensity = newScanlineIntensity;
                 PlayerPrefs.SetFloat("KerbVisionIR_ScanlineIntensity", scanlineIntensity);
+                PlayerPrefs.Save();
+            }
+
+            GUILayout.Label($"Color Tint Strength: {colorTintStrength:0.00}");
+            float newColorTintStrength = GUILayout.HorizontalSlider(colorTintStrength, MinColorTintStrength, MaxColorTintStrength);
+            if (Mathf.Abs(newColorTintStrength - colorTintStrength) > 0.001f)
+            {
+                colorTintStrength = newColorTintStrength;
+                PlayerPrefs.SetFloat("KerbVisionIR_ColorTintStrength", colorTintStrength);
                 PlayerPrefs.Save();
             }
 
@@ -395,6 +461,9 @@ namespace KerbVisionIR
             if (toolbarControl != null)
                 Destroy(toolbarControl);
 
+            if (runtimeResources != null)
+                Destroy(runtimeResources);
+
             // Restore original lighting
             RestoreLighting();
 
@@ -435,26 +504,36 @@ namespace KerbVisionIR
                 return;
             }
 
+            runtimeResources = BuildRuntimeResources();
+            if (runtimeResources == null)
+            {
+                postProcessingAvailable = false;
+                Debug.LogWarning("[KerbVisionIR] Failed to build PostProcessResources - running in lighting-only fallback mode.");
+                return;
+            }
+
             // Get or create PostProcessLayer
             layer = mainCamera.GetComponent<PostProcessLayer>();
             if (layer == null)
             {
                 layer = mainCamera.gameObject.AddComponent<PostProcessLayer>();
-                layer.Init(null); // TUFX will auto-initialize resources
+                layer.Init(runtimeResources);
                 layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
                 layer.stopNaNPropagation = true;
                 Debug.Log("[KerbVisionIR] Created PostProcessLayer");
             }
             else
             {
+                layer.Init(runtimeResources);
                 Debug.Log("[KerbVisionIR] Using existing PostProcessLayer");
             }
 
             layer.enabled = true;
-            layer.volumeLayer = -1; // Ensure our global volume is always considered
+            layer.volumeLayer = 1 << EffectLayer;
 
             // Create global PostProcessVolume
             GameObject volumeGO = new GameObject("KerbVisionIR_PostProcessVolume");
+            volumeGO.layer = EffectLayer;
             volume = volumeGO.AddComponent<PostProcessVolume>();
             volume.isGlobal = true;
             volume.priority = 100f; // High priority
@@ -467,6 +546,9 @@ namespace KerbVisionIR
 
         bool LoadShaderResources()
         {
+            loadedShaders.Clear();
+            loadedComputeShaders.Clear();
+
             // Try to load shader bundle
             string[] possiblePaths = new string[]
             {
@@ -483,9 +565,21 @@ namespace KerbVisionIR
                         var bundle = AssetBundle.LoadFromFile(path);
                         if (bundle != null)
                         {
-                            Debug.Log($"[KerbVisionIR] Loaded shader bundle from: {path}");
+                            foreach (var sh in bundle.LoadAllAssets<Shader>())
+                            {
+                                if (sh != null && !loadedShaders.ContainsKey(sh.name))
+                                    loadedShaders.Add(sh.name, sh);
+                            }
+
+                            foreach (var csh in bundle.LoadAllAssets<ComputeShader>())
+                            {
+                                if (csh != null && !loadedComputeShaders.ContainsKey(csh.name))
+                                    loadedComputeShaders.Add(csh.name, csh);
+                            }
+
+                            Debug.Log($"[KerbVisionIR] Loaded shader bundle from: {path} (Shaders: {loadedShaders.Count}, Compute: {loadedComputeShaders.Count})");
                             bundle.Unload(false);
-                            return true;
+                            return loadedShaders.Count > 0;
                         }
                     }
                     catch (Exception ex)
@@ -501,6 +595,67 @@ namespace KerbVisionIR
 
             Debug.LogWarning("[KerbVisionIR] No shader bundle found - effects may not work!");
             return false;
+        }
+
+        Shader GetLoadedShader(string name)
+        {
+            Shader s;
+            if (loadedShaders.TryGetValue(name, out s))
+                return s;
+
+            return Shader.Find(name);
+        }
+
+        ComputeShader GetLoadedComputeShader(string name)
+        {
+            ComputeShader s;
+            if (loadedComputeShaders.TryGetValue(name, out s))
+                return s;
+
+            return null;
+        }
+
+        PostProcessResources BuildRuntimeResources()
+        {
+            var resources = ScriptableObject.CreateInstance<PostProcessResources>();
+            resources.shaders = new PostProcessResources.Shaders();
+            resources.computeShaders = new PostProcessResources.ComputeShaders();
+            resources.blueNoise64 = new Texture2D[64];
+            resources.blueNoise256 = new Texture2D[8];
+            resources.smaaLuts = new PostProcessResources.SMAALuts();
+
+            resources.shaders.copy = GetLoadedShader("Hidden/PostProcessing/Copy");
+            resources.shaders.copyStd = GetLoadedShader("Hidden/PostProcessing/CopyStd");
+            resources.shaders.copyStdFromDoubleWide = GetLoadedShader("Hidden/PostProcessing/CopyStdFromDoubleWide");
+            resources.shaders.copyStdFromTexArray = GetLoadedShader("Hidden/PostProcessing/CopyStdFromTexArray");
+            resources.shaders.uber = GetLoadedShader("Hidden/PostProcessing/Uber");
+            resources.shaders.lut2DBaker = GetLoadedShader("Hidden/PostProcessing/Lut2DBaker");
+            resources.shaders.grainBaker = GetLoadedShader("Hidden/PostProcessing/GrainBaker");
+            resources.shaders.finalPass = GetLoadedShader("Hidden/PostProcessing/FinalPass");
+            resources.shaders.texture2dLerp = GetLoadedShader("Hidden/PostProcessing/Texture2DLerp");
+            resources.shaders.scalableAO = GetLoadedShader("Hidden/PostProcessing/ScalableAO");
+            resources.shaders.multiScaleAO = GetLoadedShader("Hidden/PostProcessing/MultiScaleVO");
+
+            resources.computeShaders.multiScaleAODownsample1 = GetLoadedComputeShader("KMultiScaleVODownsample1");
+            resources.computeShaders.multiScaleAODownsample2 = GetLoadedComputeShader("KMultiScaleVODownsample2");
+            resources.computeShaders.multiScaleAORender = GetLoadedComputeShader("KMultiScaleVORender");
+            resources.computeShaders.multiScaleAOUpsample = GetLoadedComputeShader("KMultiScaleVOUpsample");
+
+            // Fill required runtime textures with safe defaults to prevent null dereferences
+            var white = Texture2D.whiteTexture;
+            for (int i = 0; i < resources.blueNoise64.Length; i++)
+                resources.blueNoise64[i] = white;
+
+            for (int i = 0; i < resources.blueNoise256.Length; i++)
+                resources.blueNoise256[i] = white;
+
+            resources.smaaLuts.area = white;
+            resources.smaaLuts.search = white;
+
+            if (resources.shaders.copyStd == null || resources.shaders.copy == null || resources.shaders.uber == null || resources.shaders.lut2DBaker == null)
+                return null;
+
+            return resources;
         }
 
         void CreateEffectProfile()
@@ -562,7 +717,7 @@ namespace KerbVisionIR
                 isEffectActive = true;
                 EnableEffect();
                 PlayEnableSound();
-                BeginEnableTransition();
+                BeginningEnableTransition();
                 ScreenMessages.PostScreenMessage(
                     $"<color=lime>[Night Vision] ON - Mode: {currentMode}</color>",
                     3f,
@@ -582,7 +737,7 @@ namespace KerbVisionIR
             }
         }
 
-        void BeginEnableTransition()
+        void BeginningEnableTransition()
         {
             transitionActive = true;
             transitionEnabling = true;
@@ -648,8 +803,18 @@ namespace KerbVisionIR
             }
         }
 
+        float GetEffectBlend()
+        {
+            if (!isEffectActive)
+                return 0f;
+
+            return transitionActive ? transitionBlend : 1f;
+        }
+
         void EnableEffect()
         {
+            StoreLighting();
+
             if (!postProcessingAvailable)
             {
                 ApplyBrightnessBoost();
@@ -663,8 +828,6 @@ namespace KerbVisionIR
             }
 
             EnforceActiveEffectState();
-
-            // Apply brightness boost via lighting
             ApplyBrightnessBoost();
         }
 
@@ -672,6 +835,8 @@ namespace KerbVisionIR
         {
              if (!postProcessingAvailable || vignette == null || colorGrading == null)
                  return;
+
+            float effectBlend = GetEffectBlend();
 
             if (volume != null)
             {
@@ -683,21 +848,30 @@ namespace KerbVisionIR
             }
 
             // Apply Vignette (dark corners)
-            float effectiveVignette = Mathf.Clamp01(vignetteIntensity * transitionBlend);
+            float effectiveVignette = Mathf.Clamp01(vignetteIntensity * effectBlend);
             vignette.intensity.Override(vignetteEnabled ? effectiveVignette : 0f);
             vignette.smoothness.Override(0.35f);
 
-            // Apply Color Grading
-            float targetSaturation = currentMode == VisionMode.Monochrome ? -100f : -60f;
-            colorGrading.saturation.Override(Mathf.Lerp(0f, targetSaturation, transitionBlend));
-            colorGrading.contrast.Override(25f); // Increase contrast
-            colorGrading.brightness.Override(0f); // Neutral brightness in post
-            colorGrading.colorFilter.Override(Color.Lerp(Color.white, GetModeColor(currentMode), transitionBlend));
+            // Apply Color Grading - always monochrome base first
+            float targetSaturation = currentMode == VisionMode.Monochrome ? -100f : 0f;
+            colorGrading.saturation.Override(Mathf.Lerp(0f, targetSaturation, effectBlend));
+            colorGrading.contrast.Override(22f);
+            float targetBrightness = Mathf.Clamp((brightnessMultiplier - 1f) * 60f, 0f, 100f);
+            colorGrading.brightness.Override(Mathf.Lerp(0f, targetBrightness, effectBlend));
+
+            float tintStrength = currentMode == VisionMode.Monochrome
+                ? 0f
+                : Mathf.Clamp01(colorTintStrength);
+
+            Color targetFilter = currentMode == VisionMode.Monochrome
+                ? Color.white
+                : Color.Lerp(Color.white, GetModeColor(currentMode), tintStrength);
+            colorGrading.colorFilter.Override(Color.Lerp(Color.white, targetFilter, effectBlend));
 
             if (grain != null)
             {
                 float effectiveGrain = Mathf.Clamp(grainIntensity, MinGrainIntensity, MaxGrainIntensity);
-                grain.intensity.Override(grainEnabled ? Mathf.Clamp01(effectiveGrain * (transitionBlend + transitionNoiseBoost)) : 0f);
+                grain.intensity.Override(grainEnabled ? Mathf.Clamp01(effectiveGrain * (effectBlend + transitionNoiseBoost)) : 0f);
                 grain.size.Override(0.55f);
                 grain.lumContrib.Override(0.8f);
             }
@@ -761,14 +935,14 @@ namespace KerbVisionIR
             switch (mode)
             {
                 case VisionMode.Monochrome:
-                    return new Color(0.9f, 0.9f, 1f, 1f); // Slight blue tint
-                
+                    return Color.white;
+
                 case VisionMode.GreenNV:
-                    return new Color(0.1f, 1f, 0.3f, 1f); // Classic green
-                
+                    return new Color(0.03f, 1.55f, 0.15f, 1f);
+
                 case VisionMode.AmberWarm:
-                    return new Color(1f, 0.65f, 0.2f, 1f); // Amber/orange
-                
+                    return new Color(1.35f, 0.80f, 0.12f, 1f);
+
                 default:
                     return Color.white;
             }
@@ -776,6 +950,16 @@ namespace KerbVisionIR
 
         void TryToggleNightVision()
         {
+            if (MapView.MapIsEnabled)
+            {
+                ScreenMessages.PostScreenMessage(
+                    "<color=yellow>[Night Vision] Disabled in Map View</color>",
+                    2f,
+                    ScreenMessageStyle.UPPER_CENTER
+                );
+                return;
+            }
+
             float now = Time.unscaledTime;
             if (now - lastToggleTime < ToggleCooldownSeconds)
                 return;
@@ -926,31 +1110,24 @@ namespace KerbVisionIR
             if (fallbackWhiteTexture == null)
                 return;
 
-            Color mode = GetModeColor(currentMode);
-            float tintAlpha = Mathf.Lerp(0.08f, 0.22f, Mathf.InverseLerp(MinBrightnessMultiplier, MaxBrightnessMultiplier, brightnessMultiplier)) * transitionBlend;
-            if (currentMode == VisionMode.Monochrome)
-            {
-                mode = Color.white;
-                tintAlpha = Mathf.Lerp(0.06f, 0.16f, Mathf.InverseLerp(MinBrightnessMultiplier, MaxBrightnessMultiplier, brightnessMultiplier)) * transitionBlend;
-            }
-            GUI.color = new Color(mode.r, mode.g, mode.b, tintAlpha);
+            float effectBlend = GetEffectBlend();
+
+            float monoAlpha = Mathf.Lerp(0.14f, 0.28f, Mathf.InverseLerp(MinBrightnessMultiplier, MaxBrightnessMultiplier, brightnessMultiplier)) * effectBlend;
+            GUI.color = new Color(1f, 1f, 1f, monoAlpha);
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackWhiteTexture, ScaleMode.StretchToFill, true);
 
-            if (vignetteEnabled)
+            if (currentMode != VisionMode.Monochrome)
             {
-                float effectiveVignette = Mathf.Clamp01(vignetteIntensity * transitionBlend);
-                float vignetteAlpha = Mathf.Clamp01(effectiveVignette * 1.35f);
-                if (fallbackVignetteTexture != null && vignetteAlpha > 0.001f)
-                {
-                    GUI.color = new Color(1f, 1f, 1f, vignetteAlpha);
-                    GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackVignetteTexture, ScaleMode.StretchToFill, true);
-                }
+                Color tint = GetModeColor(currentMode);
+                float tintAlpha = Mathf.Lerp(0.05f, 0.14f, Mathf.InverseLerp(MinBrightnessMultiplier, MaxBrightnessMultiplier, brightnessMultiplier)) * effectBlend;
+                GUI.color = new Color(tint.r, tint.g, tint.b, tintAlpha);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackWhiteTexture, ScaleMode.StretchToFill, true);
             }
 
             if (grainEnabled && fallbackGrainTexture != null)
             {
                 float effectiveGrain = Mathf.Clamp(grainIntensity, MinGrainIntensity, MaxGrainIntensity);
-                GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(effectiveGrain * (0.9f * transitionBlend + transitionNoiseBoost * 0.35f)));
+                GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(effectiveGrain * (0.9f * effectBlend + transitionNoiseBoost * 0.35f)));
                 float u = Screen.width / 96f;
                 float v = Screen.height / 96f;
                 GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackGrainTexture, new Rect(0f, 0f, u, v), true);
@@ -958,12 +1135,23 @@ namespace KerbVisionIR
 
             if (scanlinesEnabled && fallbackScanlineTexture != null)
             {
-                float lineAlpha = Mathf.Clamp01(scanlineIntensity * transitionBlend);
+                float lineAlpha = Mathf.Clamp01(scanlineIntensity * effectBlend);
                 if (lineAlpha > 0.001f)
                 {
                     GUI.color = new Color(1f, 1f, 1f, lineAlpha);
                     float vRepeat = Screen.height / 2f;
                     GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackScanlineTexture, new Rect(0f, 0f, 1f, vRepeat), true);
+                }
+            }
+
+            if (vignetteEnabled)
+            {
+                float effectiveVignette = Mathf.Clamp01(vignetteIntensity * effectBlend);
+                float vignetteAlpha = Mathf.Clamp01(effectiveVignette * 1.35f);
+                if (fallbackVignetteTexture != null && vignetteAlpha > 0.001f)
+                {
+                    GUI.color = new Color(1f, 1f, 1f, vignetteAlpha);
+                    GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackVignetteTexture, ScaleMode.StretchToFill, true);
                 }
             }
 
@@ -980,43 +1168,66 @@ namespace KerbVisionIR
             GUI.color = Color.white;
         }
 
+        void DrawPostProcessOverlay()
+        {
+            if (fallbackWhiteTexture == null)
+                return;
+
+            if (currentMode != VisionMode.Monochrome)
+            {
+                Color tint = GetModeColor(currentMode);
+                float tintAlpha = 0.16f * transitionBlend;
+                GUI.color = new Color(tint.r, tint.g, tint.b, tintAlpha);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackWhiteTexture, ScaleMode.StretchToFill, true);
+            }
+
+            if (scanlinesEnabled && fallbackScanlineTexture != null)
+            {
+                float lineAlpha = Mathf.Clamp01(scanlineIntensity * transitionBlend);
+                if (lineAlpha > 0.001f)
+                {
+                    GUI.color = new Color(1f, 1f, 1f, lineAlpha);
+                    float vRepeat = Screen.height / 2f;
+                    GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackScanlineTexture, new Rect(0f, 0f, 1f, vRepeat), true);
+                }
+            }
+
+            GUI.color = Color.white;
+        }
+
         #endregion
 
         #region Lighting Control
 
         void StoreLighting()
         {
-            if (!lightingStored)
-            {
-                storedAmbientLight = RenderSettings.ambientLight;
-                storedAmbientIntensity = RenderSettings.ambientIntensity;
-                lightingStored = true;
-                Debug.Log($"[KerbVisionIR] Stored lighting: {storedAmbientLight}, intensity: {storedAmbientIntensity}");
-            }
+            storedAmbientLight = RenderSettings.ambientLight;
+            storedAmbientIntensity = RenderSettings.ambientIntensity;
+            lightingStored = true;
+            Debug.Log($"[KerbVisionIR] Stored lighting: {storedAmbientLight}, intensity: {storedAmbientIntensity}");
         }
 
         void ApplyBrightnessBoost()
         {
             if (lightingStored)
             {
-                float blend = isEffectActive ? transitionBlend : 0f;
+                float blend = GetEffectBlend();
                 float effectiveBrightness = Mathf.Lerp(1f, brightnessMultiplier, blend);
 
-                if (postProcessingAvailable)
+                Color boosted = storedAmbientLight * effectiveBrightness;
+                float gray = boosted.grayscale;
+                Color monoBoosted = new Color(gray, gray, gray, boosted.a);
+
+                if (currentMode == VisionMode.Monochrome)
                 {
-                    RenderSettings.ambientLight = storedAmbientLight * effectiveBrightness;
+                    RenderSettings.ambientLight = monoBoosted;
                 }
                 else
                 {
-                    Color boosted = storedAmbientLight * effectiveBrightness;
                     Color tint = GetModeColor(currentMode);
-                    if (currentMode == VisionMode.Monochrome)
-                    {
-                        float gray = boosted.grayscale;
-                        boosted = new Color(gray, gray, gray, boosted.a);
-                        tint = Color.white;
-                    }
-                    RenderSettings.ambientLight = Color.Lerp(boosted, new Color(boosted.r * tint.r, boosted.g * tint.g, boosted.b * tint.b, boosted.a), FallbackTintStrength * blend);
+                    Color tinted = new Color(monoBoosted.r * tint.r, monoBoosted.g * tint.g, monoBoosted.b * tint.b, monoBoosted.a);
+                    float ambientTint = Mathf.Clamp01(colorTintStrength * blend);
+                    RenderSettings.ambientLight = Color.Lerp(monoBoosted, tinted, ambientTint);
                 }
 
                 RenderSettings.ambientIntensity = storedAmbientIntensity * effectiveBrightness;
@@ -1057,7 +1268,7 @@ namespace KerbVisionIR
             if (targetCamera == activeCamera && layer != null)
             {
                 layer.enabled = true;
-                layer.volumeLayer = -1;
+                layer.volumeLayer = 1 << EffectLayer;
                 return;
             }
 
@@ -1066,14 +1277,18 @@ namespace KerbVisionIR
             if (layer == null)
             {
                 layer = activeCamera.gameObject.AddComponent<PostProcessLayer>();
-                layer.Init(null);
+                layer.Init(runtimeResources);
                 layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
                 layer.stopNaNPropagation = true;
                 Debug.Log($"[KerbVisionIR] Added PostProcessLayer to active camera: {activeCamera.name}");
             }
+            else
+            {
+                layer.Init(runtimeResources);
+            }
 
             layer.enabled = true;
-            layer.volumeLayer = -1;
+            layer.volumeLayer = 1 << EffectLayer;
         }
 
         #endregion

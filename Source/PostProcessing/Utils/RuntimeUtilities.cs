@@ -255,6 +255,26 @@ namespace UnityEngine.Rendering.PostProcessing
 
         static Material s_CopyStdMaterial;
 
+        static Shader FindFirstSupportedShader(params string[] shaderNames)
+        {
+            foreach (var name in shaderNames)
+            {
+                var shader = Shader.Find(name);
+                if (shader != null && shader.isSupported)
+                    return shader;
+            }
+
+            return null;
+        }
+
+        static Shader ResolveShader(Shader resourceShader, params string[] fallbackShaderNames)
+        {
+            if (resourceShader != null && resourceShader.isSupported)
+                return resourceShader;
+
+            return FindFirstSupportedShader(fallbackShaderNames);
+        }
+
         /// <summary>
         /// A simple copy material to use with the builtin pipelines.
         /// </summary>
@@ -265,8 +285,13 @@ namespace UnityEngine.Rendering.PostProcessing
                 if (s_CopyStdMaterial != null)
                     return s_CopyStdMaterial;
 
-                Assert.IsNotNull(s_Resources);
+                if (s_Resources == null || s_Resources.shaders == null || s_Resources.shaders.copyStd == null)
+                    return null;
+
                 var shader = s_Resources.shaders.copyStd;
+                if (!shader.isSupported)
+                    return null;
+
                 s_CopyStdMaterial = new Material(shader)
                 {
                     name = "PostProcess - CopyStd",
@@ -289,8 +314,13 @@ namespace UnityEngine.Rendering.PostProcessing
                 if (s_CopyStdFromDoubleWideMaterial != null)
                     return s_CopyStdFromDoubleWideMaterial;
 
-                Assert.IsNotNull(s_Resources);
+                if (s_Resources == null || s_Resources.shaders == null || s_Resources.shaders.copyStdFromDoubleWide == null)
+                    return null;
+
                 var shader = s_Resources.shaders.copyStdFromDoubleWide;
+                if (!shader.isSupported)
+                    return null;
+
                 s_CopyStdFromDoubleWideMaterial = new Material(shader)
                 {
                     name = "PostProcess - CopyStdFromDoubleWide",
@@ -313,8 +343,13 @@ namespace UnityEngine.Rendering.PostProcessing
                 if (s_CopyMaterial != null)
                     return s_CopyMaterial;
 
-                Assert.IsNotNull(s_Resources);
+                if (s_Resources == null || s_Resources.shaders == null || s_Resources.shaders.copy == null)
+                    return null;
+
                 var shader = s_Resources.shaders.copy;
+                if (!shader.isSupported)
+                    return null;
+
                 s_CopyMaterial = new Material(shader)
                 {
                     name = "PostProcess - Copy",
@@ -337,8 +372,13 @@ namespace UnityEngine.Rendering.PostProcessing
                 if (s_CopyFromTexArrayMaterial != null)
                     return s_CopyFromTexArrayMaterial;
 
-                Assert.IsNotNull(s_Resources);
+                if (s_Resources == null || s_Resources.shaders == null || s_Resources.shaders.copyStdFromTexArray == null)
+                    return null;
+
                 var shader = s_Resources.shaders.copyStdFromTexArray;
+                if (!shader.isSupported)
+                    return null;
+
                 s_CopyFromTexArrayMaterial = new Material(shader)
                 {
                     name = "PostProcess - CopyFromTexArray",
