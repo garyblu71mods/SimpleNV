@@ -90,7 +90,7 @@ namespace KerbVisionIR
         private bool guiUnderlayLogged = false;
 
         // Toolbar
-        private const string ToolbarModId = "SimpleNV";
+        private const string ToolbarModId = "KerbVisionIR";
         private const int EffectLayer = 31;
         private ToolbarControl toolbarControl;
         private bool showWindow = false;
@@ -295,7 +295,7 @@ namespace KerbVisionIR
         {
             GUILayout.BeginVertical();
 
-            GUILayout.Label("Mod: SimpleNV");
+            GUILayout.Label("Mod: KerbVisionIR");
 
             GUILayout.Space(8);
 
@@ -588,8 +588,8 @@ namespace KerbVisionIR
             // Try to load shader bundle
             string[] possiblePaths = new string[]
             {
-                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/SimpleNV/Shaders/simplenv-pp.ssf"),
-                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/SimpleNV/Shaders/kerbvision-pp.ssf")
+                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/KerbVisionIR/Shaders/kerbvision-pp.ssf"),
+                Path.Combine(KSPUtil.ApplicationRootPath, "GameData/KerbVisionIR/Shaders/simplenv-pp.ssf")
             };
 
             foreach (string path in possiblePaths)
@@ -1077,7 +1077,6 @@ namespace KerbVisionIR
                 audioSource = gameObject.GetComponent<AudioSource>();
                 if (audioSource == null)
                     audioSource = gameObject.AddComponent<AudioSource>();
-
                 audioSource.playOnAwake = false;
                 audioSource.loop = false;
                 audioSource.spatialBlend = 0f;
@@ -1086,10 +1085,10 @@ namespace KerbVisionIR
 
             string[] clipPaths =
             {
-                "SimpleNV/soud/NVon",
-                "SimpleNV/sound/NVon",
-                "SimpleNV/Sound/NVon",
-                "SimpleNV/Sounds/NVon"
+                "KerbVisionIR/soud/NVon",
+                "KerbVisionIR/sound/NVon",
+                "KerbVisionIR/Sound/NVon",
+                "KerbVisionIR/Sounds/NVon"
             };
 
             foreach (var clipPath in clipPaths)
@@ -1103,7 +1102,24 @@ namespace KerbVisionIR
                 }
             }
 
-            Debug.LogWarning("[KerbVisionIR] NVon sound not found (expected under GameData/SimpleNV/soud or sound)");
+            Debug.LogWarning("[KerbVisionIR] NVon sound not found (expected under GameData/KerbVisionIR)");
+        }
+
+        string ResolveToolbarIconPath()
+        {
+            string[] iconCandidates =
+            {
+                "KerbVisionIR/Assets/KerbVisionIR-Icon",
+                "KerbVisionIR/Assets/SimpleNV-Icon"
+            };
+
+            foreach (string iconPath in iconCandidates)
+            {
+                if (GameDatabase.Instance.GetTexture(iconPath, false) != null)
+                    return iconPath;
+            }
+
+            return "KerbVisionIR/Assets/SimpleNV-Icon";
         }
 
         void InitializeToolbar()
@@ -1114,14 +1130,16 @@ namespace KerbVisionIR
             if (toolbarControl == null)
                 toolbarControl = gameObject.AddComponent<ToolbarControl>();
 
+            string iconPath = ResolveToolbarIconPath();
+
             toolbarControl.AddToAllToolbars(
                 OnToolbarEnable,
                 OnToolbarDisable,
                 ApplicationLauncher.AppScenes.FLIGHT,
                 ToolbarModId,
                 ToolbarModId,
-                "SimpleNV/Assets/SimpleNV-Icon",
-                "SimpleNV/Assets/SimpleNV-Icon",
+                iconPath,
+                iconPath,
                 ToolbarModId);
         }
 
