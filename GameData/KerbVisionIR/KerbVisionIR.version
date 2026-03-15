@@ -1,0 +1,10 @@
+{
+  "NAME": "TUFX",
+  "URL": "https://github.com/garyblu71mods/SimpleNV/releases/latest/download/KerbVisionIR.version",
+  "DOWNLOAD": "https://github.com/garyblu71mods/SimpleNV/releases",
+  "CHANGE_LOG_URL": "https://github.com/garyblu71mods/SimpleNV/blob/restart-clean/CHANGELOG.md",
+  "VERSION": "1.1.1.0",
+  "KSP_VERSION_MIN": "1.12.3",
+  "KSP_VERSION_MAX": "'1.12'",
+  "KSP_VERSION": "1.12"
+}

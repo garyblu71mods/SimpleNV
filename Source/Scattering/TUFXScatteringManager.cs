@@ -10,7 +10,8 @@ using Log = KSPBuildTools.Log;
 namespace TUFX
 {
 
-	[KSPAddon(KSPAddon.Startup.Instantly, true)]
+	// Disabled in KerbVisionIR build to avoid conflicting with external TUFX/ocean rendering.
+	// [KSPAddon(KSPAddon.Startup.Instantly, true)]
 	public class TUFXScatteringManager : MonoBehaviour
 	{
 
