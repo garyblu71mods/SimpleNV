@@ -41,7 +41,6 @@ namespace KerbVisionIR
         // Audio
         private AudioSource audioSource;
         private AudioClip nvOnClip;
-        private const float NvOnSoundVolumeBoost = 2.2f;
 
         // State variables
         private bool isEffectActive = false;
@@ -1087,9 +1086,6 @@ namespace KerbVisionIR
                 audioSource.loop = false;
                 audioSource.spatialBlend = 0f;
                 audioSource.volume = 1f;
-                audioSource.ignoreListenerPause = true;
-                audioSource.ignoreListenerVolume = true;
-                audioSource.priority = 32;
             }
 
             string[] clipPaths =
@@ -1171,7 +1167,7 @@ namespace KerbVisionIR
             if (audioSource == null || nvOnClip == null)
                 return;
 
-            audioSource.PlayOneShot(nvOnClip, NvOnSoundVolumeBoost);
+            audioSource.PlayOneShot(nvOnClip);
         }
 
         void CreateFallbackGrainTexture()
