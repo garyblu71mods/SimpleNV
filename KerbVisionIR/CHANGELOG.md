@@ -1,74 +1,35 @@
-# KerbVisionIR v1.0.1 - Changelog
+# Changelog
 
-## ✅ NAPRAWIONE
+All notable changes to KerbVisionIR are documented in this file.
 
-### 1. **Toolbar Button**
-- ✅ Dodana zielona ikona na toolbar w Flight
-- Kliknięcie = toggle effect
-- Prawy klik = ustawienia
+## 2.0.1 - 2026-03-15
 
-### 2. **Skybox/Gwiazdy**
-- ✅ Tło przestrzeni teraz również zmienia kolor!
-- Gwiazdy dostają tint (zielony/amber/mono)
-- Niebo jasnieje razem z resztą sceny
+### Changed
 
-### 3. **GUI Improvements**
-- ✅ Większy tytuł "KerbVision IR - Night Vision"
-- ✅ Info o wersji i trybie (FALLBACK/FULL)
-- ✅ Status ON/OFF przy toggle
-- ✅ Debug logi w konsoli
+- Updated on-screen status text to simple messages: `Night Vision ON` and `Night Vision OFF`
+- Tuned grain response curve for smoother slider progression (less dead zone at low values, less saturation in mid range)
+- Documentation refresh for packaging and behavior notes
 
-## 🎯 CO TERAZ DZIAŁA
+## 2.0.0 - 2026-03-15
 
-### ✅ Działające funkcje:
-- **Brightness** - jasność sceny 0-2.0x
-- **Color Tint** - zielony/amber/mono odcień
-- **Skybox Tint** - gwiazdy/tło też się zmieniają ⭐
-- **Toolbar Icon** - zielony przycisk na toolbar
-- **Hotkey** - Alt + ` toggle
-- **GUI** - Alt + F8 ustawienia
-- **Audio** - dźwięk aktywacji (jeśli plik istnieje)
+### Added
 
-### ⚠ Wyłączone (wymaga TUFX shader):
-- Vignette (ciemne rogi)
-- Grain (filmowe ziarno)
+- Stable monochrome-first night vision pipeline
+- Green tint applied through `ColorGrading` channel mixer
+- In-flight controls for brightness, vignette, grain, scanlines, and tint strength
+- Key binding support with optional Alt requirement
+- Version/date footer in GUI
 
-## 🔧 INSTRUKCJA
+### Changed
 
-### Podstawowe użycie:
-1. Uruchom KSP
-2. Wejdź w Flight
-3. **Kliknij zieloną ikonę na toolbar** (nowe!)
-4. Lub naciśnij **Alt + `**
+- GUI cleanup and presentation update
+- Map view behavior hardened (effect disabled in map)
+- Packaging/layout aligned for `GameData/KerbVisionIR`
+- Legacy scattering startup disabled to avoid rendering conflicts
 
-### Ustawienia:
-- Kliknij prawym na ikonę
-- Lub **Alt + F8**
+### Fixed
 
-### Zmiana trybu:
-- W GUI: kliknij "GreenNV" aby przełączać
-- Tryby: Monochrome → GreenNV → AmberWarm
-
-## 📝 TECHNICAL DETAILS
-
-### Nowe pliki:
-- `ToolbarButton.cs` - obsługa ApplicationLauncher
-- `SkyboxColorCorrection.cs` - zmiana koloru tła/gwiazd
-
-### Zmiany w istniejących:
-- `KerbVisionIR.cs` - integracja toolbar + skybox
-- `VisionSettingsWindow.cs` - lepszy layout i info
-
-## 🐛 KNOWN ISSUES
-
-Brak znanych problemów! 🎉
-
-## 🚀 NEXT STEPS
-
-Chcesz pełne efekty (vignette + grain)?
-1. Zainstaluj TUFX przez CKAN
-2. Skopiuj shader: `GameData/TUFX/Shaders/tufx-universal.ssf`
-3. Do: `GameData/KerbVisionIR/Shaders/kerbvision-pp.ssf`
-4. Zrestartuj KSP
-
-Mod automatycznie przełączy się na FULL MODE! ✨
+- Green tint disappearing after transition
+- Milk/fog look caused by stacked overlays
+- Scanline layering over UI elements
+- Rapid accidental ON/OFF toggling from repeated key input

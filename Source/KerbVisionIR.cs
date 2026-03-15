@@ -41,6 +41,7 @@ namespace KerbVisionIR
         // Audio
         private AudioSource audioSource;
         private AudioClip nvOnClip;
+        private const float NvOnSoundVolumeBoost = 2.2f;
 
         // State variables
         private bool isEffectActive = false;
@@ -59,7 +60,7 @@ namespace KerbVisionIR
         private const float MinVignetteIntensity = 0f;
         private const float MaxVignetteIntensity = 0.8f;
         private const float MinGrainIntensity = 0f;
-        private const float MaxGrainIntensity = 0.35f;
+        private const float MaxGrainIntensity = 1.0f;
         private const float MinScanlineIntensity = 0f;
         private const float MaxScanlineIntensity = 0.45f;
         private const float MinColorTintStrength = 0f;
@@ -776,8 +777,8 @@ namespace KerbVisionIR
                 PlayEnableSound();
                 BeginningEnableTransition();
                 ScreenMessages.PostScreenMessage(
-                    $"<color=lime>[Night Vision] ON - Mode: {currentMode}</color>",
-                    3f,
+                    "Night Vision ON",
+                    2f,
                     ScreenMessageStyle.UPPER_CENTER
                 );
                 Debug.Log($"[KerbVisionIR] Effect ENABLED - Mode: {currentMode}, Brightness: {brightnessMultiplier}x");
@@ -786,7 +787,7 @@ namespace KerbVisionIR
             {
                 BeginDisableTransition();
                 ScreenMessages.PostScreenMessage(
-                    "<color=red>[Night Vision] OFF</color>",
+                    "Night Vision OFF",
                     2f,
                     ScreenMessageStyle.UPPER_CENTER
                 );
@@ -919,9 +920,14 @@ namespace KerbVisionIR
             {
                 grain.enabled.Override(true);
                 grain.colored.Override(false);
-                grain.size.Override(0.55f);
-                grain.lumContrib.Override(0.8f);
-                float effectiveGrain = grainEnabled ? Mathf.Clamp(grainIntensity * 4f * effectBlend, MinGrainIntensity, MaxGrainIntensity) : 0f;
+                grain.size.Override(0.35f);
+                grain.lumContrib.Override(0.2f);
+
+                float grainResponse = Mathf.Pow(Mathf.Clamp01(grainIntensity), 0.85f);
+                float effectiveGrain = grainEnabled
+                    ? Mathf.Clamp(grainResponse * 0.75f * effectBlend, MinGrainIntensity, MaxGrainIntensity)
+                    : 0f;
+
                 grain.intensity.Override(effectiveGrain);
             }
 
@@ -1081,6 +1087,9 @@ namespace KerbVisionIR
                 audioSource.loop = false;
                 audioSource.spatialBlend = 0f;
                 audioSource.volume = 1f;
+                audioSource.ignoreListenerPause = true;
+                audioSource.ignoreListenerVolume = true;
+                audioSource.priority = 32;
             }
 
             string[] clipPaths =
@@ -1162,7 +1171,7 @@ namespace KerbVisionIR
             if (audioSource == null || nvOnClip == null)
                 return;
 
-            audioSource.PlayOneShot(nvOnClip);
+            audioSource.PlayOneShot(nvOnClip, NvOnSoundVolumeBoost);
         }
 
         void CreateFallbackGrainTexture()
