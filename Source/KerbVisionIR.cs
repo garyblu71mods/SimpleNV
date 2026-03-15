@@ -237,12 +237,10 @@ namespace KerbVisionIR
                 {
                     EnforceActiveEffectState();
                 }
-                else
+
+                if (grainEnabled && Time.frameCount - fallbackGrainFrame > 3)
                 {
-                    if (grainEnabled && Time.frameCount - fallbackGrainFrame > 3)
-                    {
-                        CreateFallbackGrainTexture();
-                    }
+                    CreateFallbackGrainTexture();
                 }
 
                 ApplyBrightnessBoost();
@@ -275,32 +273,17 @@ namespace KerbVisionIR
             GUI.depth = 9999;
 
             float effectBlend = GetEffectBlend();
-            bool useMonochromeOnly = currentMode == VisionMode.Monochrome || colorTintStrength <= 0.05f;
 
-            if (!useMonochromeOnly)
+            if (grainEnabled && fallbackGrainTexture != null)
             {
-                Color tint = GetModeColor(VisionMode.GreenNV);
-                float tintAlpha = Mathf.Clamp01(0.55f * colorTintStrength);
-                if (tintAlpha > 0.001f)
+                float effectiveGrain = Mathf.Clamp(grainIntensity, MinGrainIntensity, MaxGrainIntensity);
+                float grainAlpha = Mathf.Clamp01(effectiveGrain * (0.9f + transitionNoiseBoost * 0.35f) * effectBlend);
+                if (grainAlpha > 0.001f)
                 {
-                    if (!guiUnderlayLogged)
-                    {
-                        Debug.Log($"[KerbVisionIR] GUI underlay active (fallback), tintAlpha={tintAlpha:0.000}, tintStrength={colorTintStrength:0.000}");
-                        guiUnderlayLogged = true;
-                    }
-                    GUI.color = new Color(tint.r, tint.g, tint.b, tintAlpha);
-                    GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), fallbackWhiteTexture, ScaleMode.StretchToFill, true);
-                }
-            }
-
-            if (scanlinesEnabled && fallbackScanlineTexture != null)
-            {
-                float lineAlpha = Mathf.Clamp01(scanlineIntensity * 0.85f);
-                if (lineAlpha > 0.001f)
-                {
-                    GUI.color = new Color(0f, 0f, 0f, lineAlpha);
-                    float vRepeat = Screen.height / 2f;
-                    GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackScanlineTexture, new Rect(0f, 0f, 1f, vRepeat), true);
+                    GUI.color = new Color(1f, 1f, 1f, grainAlpha);
+                    float u = Screen.width / 96f;
+                    float v = Screen.height / 96f;
+                    GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, Screen.width, Screen.height), fallbackGrainTexture, new Rect(0f, 0f, u, v), true);
                 }
             }
 
@@ -312,19 +295,7 @@ namespace KerbVisionIR
         {
             GUILayout.BeginVertical();
 
-            GUILayout.Label($"Mod: KerbVisionIR");
-
-            // Last modification date of this assembly
-            try
-            {
-                var asmPath = Assembly.GetExecutingAssembly().Location;
-                var lastWrite = File.GetLastWriteTime(asmPath);
-                GUILayout.Label($"Last modified: {lastWrite}");
-            }
-            catch
-            {
-                GUILayout.Label("Last modified: unknown");
-            }
+            GUILayout.Label("Mod: SimpleNV");
 
             GUILayout.Space(8);
 
@@ -335,8 +306,6 @@ namespace KerbVisionIR
             }
 
             GUILayout.Space(6);
-
-            GUILayout.Label("Mode: Green (Tint 0.00 = Monochrome)");
 
             GUILayout.Space(4);
             GUILayout.Label($"Brightness: {brightnessMultiplier:0.00}");
@@ -372,7 +341,6 @@ namespace KerbVisionIR
                 if (isEffectActive)
                     EnforceActiveEffectState();
                 Debug.Log($"[KerbVisionIR] Grain toggled: {(grainEnabled ? "ON" : "OFF")}");
-
             }
 
             if (GUILayout.Button($"Scanlines: {(scanlinesEnabled ? "ON" : "OFF")}", GUILayout.Height(24), GUILayout.ExpandWidth(true)))
@@ -447,6 +415,26 @@ namespace KerbVisionIR
                 PlayerPrefs.Save();
             }
             GUILayout.EndHorizontal();
+
+            GUILayout.FlexibleSpace();
+            var footerStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 10,
+                alignment = TextAnchor.LowerRight
+            };
+
+            try
+            {
+                var asm = Assembly.GetExecutingAssembly();
+                var version = asm.GetName().Version;
+                var asmPath = asm.Location;
+                var lastWrite = File.GetLastWriteTime(asmPath);
+                GUILayout.Label($"v{version}  {lastWrite:yyyy-MM-dd HH:mm}", footerStyle);
+            }
+            catch
+            {
+                GUILayout.Label("v?  date unknown", footerStyle);
+            }
 
             GUILayout.EndVertical();
 
@@ -927,6 +915,16 @@ namespace KerbVisionIR
             vignette.intensity.Override(vignetteEnabled ? effectiveVignette : 0f);
             vignette.smoothness.Override(0.35f);
 
+            if (grain != null)
+            {
+                grain.enabled.Override(true);
+                grain.colored.Override(false);
+                grain.size.Override(0.55f);
+                grain.lumContrib.Override(0.8f);
+                float effectiveGrain = grainEnabled ? Mathf.Clamp(grainIntensity * 4f * effectBlend, MinGrainIntensity, MaxGrainIntensity) : 0f;
+                grain.intensity.Override(effectiveGrain);
+            }
+
             colorGrading.saturation.Override(0f);
             colorGrading.contrast.Override(22f);
             float targetBrightness = Mathf.Clamp((brightnessMultiplier - 1f) * 60f, 0f, 100f);
@@ -1245,24 +1243,29 @@ namespace KerbVisionIR
 
             bool drewOverlay = false;
 
-            if (scanlinesEnabled && cameraScanlineMaterial != null && fallbackScanlineTexture != null)
+            if (scanlinesEnabled && cameraTintMaterial != null)
             {
-                float lineAlpha = Mathf.Clamp01(scanlineIntensity * 0.85f);
+                float lineAlpha = Mathf.Clamp01(scanlineIntensity * 0.85f * GetEffectBlend());
                 if (lineAlpha > 0.001f)
                 {
-                    float vRepeat = Screen.height / 2f;
-                    cameraScanlineMaterial.mainTexture = fallbackScanlineTexture;
-                    if (cameraScanlineMaterial.HasProperty("_Color"))
-                        cameraScanlineMaterial.SetColor("_Color", new Color(0f, 0f, 0f, lineAlpha));
-
-                    cameraScanlineMaterial.SetPass(0);
+                    float step = Mathf.Max(2f, Screen.height / 540f * 2f);
+                    float h = 1f / Screen.height;
+                    cameraTintMaterial.SetPass(0);
                     GL.PushMatrix();
                     GL.LoadOrtho();
                     GL.Begin(GL.QUADS);
-                    GL.TexCoord2(0f, 0f); GL.Vertex3(0f, 0f, 0f);
-                    GL.TexCoord2(1f, 0f); GL.Vertex3(1f, 0f, 0f);
-                    GL.TexCoord2(1f, vRepeat); GL.Vertex3(1f, 1f, 0f);
-                    GL.TexCoord2(0f, vRepeat); GL.Vertex3(0f, 1f, 0f);
+                    GL.Color(new Color(0f, 0f, 0f, lineAlpha));
+
+                    for (float y = 0f; y < Screen.height; y += step)
+                    {
+                        float y0 = y / Screen.height;
+                        float y1 = Mathf.Min(1f, y0 + h);
+                        GL.Vertex3(0f, y0, 0f);
+                        GL.Vertex3(1f, y0, 0f);
+                        GL.Vertex3(1f, y1, 0f);
+                        GL.Vertex3(0f, y1, 0f);
+                    }
+
                     GL.End();
                     GL.PopMatrix();
                     drewOverlay = true;
