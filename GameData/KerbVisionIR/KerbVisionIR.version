@@ -1,10 +1,21 @@
 {
-  "NAME": "TUFX",
-  "URL": "https://github.com/garyblu71mods/SimpleNV/releases/latest/download/KerbVisionIR.version",
-  "DOWNLOAD": "https://github.com/garyblu71mods/SimpleNV/releases",
+  "NAME": "KerbVisionIR",
+  "URL": "https://raw.githubusercontent.com/garyblu71mods/SimpleNV/restart-clean/GameData/KerbVisionIR/KerbVisionIR.version",
+  "DOWNLOAD": "https://spacedock.info/mod/4105/KerbVision%20IR",
   "CHANGE_LOG_URL": "https://github.com/garyblu71mods/SimpleNV/blob/restart-clean/CHANGELOG.md",
-  "VERSION": "1.1.1.0",
-  "KSP_VERSION_MIN": "1.12.3",
-  "KSP_VERSION_MAX": "'1.12'",
-  "KSP_VERSION": "1.12"
+  "VERSION": {
+    "MAJOR": 2,
+    "MINOR": 0,
+    "PATCH": 1
+  },
+  "KSP_VERSION_MIN": {
+    "MAJOR": 1,
+    "MINOR": 12,
+    "PATCH": 3
+  },
+  "KSP_VERSION_MAX": {
+    "MAJOR": 1,
+    "MINOR": 12,
+    "PATCH": 99
+  }
 }

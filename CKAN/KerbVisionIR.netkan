@@ -1,11 +1,15 @@
 {
-  "$kref": "#/ckan/github/garyblu71mods/SimpleNV",
+  "$kref": "#/ckan/spacedock/4105",
   "identifier": "KerbVisionIR",
   "name": "KerbVisionIR",
   "abstract": "Monochrome-first night vision effect for KSP.",
   "license": "GPL-3.0",
   "author": "garyblu71mods",
   "ksp_version_min": "1.12.3",
+  "resources": {
+    "spacedock": "https://spacedock.info/mod/4105/KerbVision%20IR",
+    "repository": "https://github.com/garyblu71mods/SimpleNV"
+  },
   "depends": [
     {
       "name": "ClickThroughBlocker"

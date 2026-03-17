@@ -18,7 +18,8 @@ packages/
 .nuget/
 
 # KSP-specific
-GameData/TUFX/Plugins/
+GameData/TUFX/
+GameData/SimpleNV/
 GameData/KerbVisionIR/Plugins/*.dll
 GameData/KerbVisionIR/Plugins/*.pdb
 
