@@ -47,7 +47,7 @@ namespace KerbVisionIR
         private VisionMode currentMode = VisionMode.GreenNV;
         private float brightnessMultiplier = 1.8f;
         private const float MinBrightnessMultiplier = 1.0f;
-        private const float MaxBrightnessMultiplier = 4.0f;
+        private const float MaxBrightnessMultiplier = 20.0f;
         private const float FallbackTintStrength = 0.85f;
         private bool vignetteEnabled = true;
         private bool grainEnabled = false;
@@ -107,6 +107,10 @@ namespace KerbVisionIR
         private Color storedAmbientLight;
         private float storedAmbientIntensity;
         private bool lightingStored = false;
+
+        // Map view state tracking
+        private bool wasInMapView = false;
+        private bool nvWasActiveBeforeMapView = false;
 
         // Vision modes
         public enum VisionMode
@@ -172,19 +176,40 @@ namespace KerbVisionIR
 
         void Update()
         {
-            if (MapView.MapIsEnabled)
+            bool mapNow = MapView.MapIsEnabled;
+
+            if (mapNow && !wasInMapView)
             {
-                if (isEffectActive || transitionActive)
+                wasInMapView = true;
+                nvWasActiveBeforeMapView = isEffectActive;
+                transitionActive = false;
+                transitionBlend = 0f;
+                transitionOverlayAlpha = 0f;
+                transitionNoiseBoost = 0f;
+                if (isEffectActive)
                 {
-                    transitionActive = false;
-                    transitionBlend = 0f;
-                    transitionOverlayAlpha = 0f;
-                    transitionNoiseBoost = 0f;
                     isEffectActive = false;
                     DisableEffect();
                 }
-                return;
             }
+
+            if (!mapNow && wasInMapView)
+            {
+                wasInMapView = false;
+                bool shouldResume = nvWasActiveBeforeMapView;
+                nvWasActiveBeforeMapView = false;
+                if (shouldResume)
+                {
+                    isEffectActive = true;
+                    cameraOverlayLogged = false;
+                    guiUnderlayLogged = false;
+                    EnableEffect();
+                    BeginningEnableTransition();
+                }
+            }
+
+            if (mapNow)
+                return;
 
             if (transitionActive)
             {
@@ -932,7 +957,7 @@ namespace KerbVisionIR
 
             colorGrading.saturation.Override(0f);
             colorGrading.contrast.Override(22f);
-            float targetBrightness = Mathf.Clamp((brightnessMultiplier - 1f) * 60f, 0f, 100f);
+            float targetBrightness = (brightnessMultiplier - 1f) * 60f;
             colorGrading.brightness.Override(Mathf.Lerp(0f, targetBrightness, effectBlend));
             colorGrading.colorFilter.Override(Color.white);
 
@@ -995,6 +1020,12 @@ namespace KerbVisionIR
                 if (tintColorGrading != null)
                 {
                     tintColorGrading.colorFilter.Override(Color.white);
+                }
+
+                if (volume != null)
+                {
+                    volume.weight = 0f;
+                    volume.enabled = false;
                 }
 
                 if (tintVolume != null)
@@ -1386,19 +1417,18 @@ namespace KerbVisionIR
 
                 Color boosted = storedAmbientLight * effectiveBrightness;
                 float gray = boosted.grayscale;
-                Color monoBoosted = new Color(gray, gray, gray, boosted.a);
-                bool useMonochromeOnly = currentMode == VisionMode.Monochrome || colorTintStrength <= 0.05f;
 
-                if (useMonochromeOnly)
-                {
-                    RenderSettings.ambientLight = monoBoosted;
-                }
-                else
-                {
-                    RenderSettings.ambientLight = monoBoosted;
-                }
+                // NV sensor noise floor: even in total darkness the sensor amplifies a baseline signal,
+                // preventing a completely black image on the dark side of a moon/planet.
+                float nvFloor = 0.02f * effectiveBrightness * blend;
+                gray = Mathf.Max(gray, nvFloor);
 
-                RenderSettings.ambientIntensity = storedAmbientIntensity * effectiveBrightness;
+                Color monoBoosted = new Color(gray, gray, gray, 1f);
+                RenderSettings.ambientLight = monoBoosted;
+
+                float baseIntensity = storedAmbientIntensity * effectiveBrightness;
+                float minIntensity = 0.02f * effectiveBrightness * blend;
+                RenderSettings.ambientIntensity = Mathf.Max(baseIntensity, minIntensity);
             }
         }
 

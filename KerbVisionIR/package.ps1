@@ -4,7 +4,7 @@
 
 param(
     [string]$KSPPath = $env:KSPRoot,
-    [string]$Version = "2.0.1"
+    [string]$Version = "2.0.3"
 )
 
 $RepoRoot   = Split-Path $PSScriptRoot -Parent

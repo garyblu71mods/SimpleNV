@@ -3,9 +3,9 @@
 ## 1. Publish release on SpaceDock
 
 - URL: `https://spacedock.info/mod/4105/KerbVision%20IR`
-- Upload ZIP: `KerbVisionIR_v2_0_1.zip`
+- Upload ZIP: `KerbVisionIR_v2_0_3.zip`
 - ZIP must contain: `GameData/KerbVisionIR/...`
-- Set version to `2.0.1` on SpaceDock
+- Set version to `2.0.3` on SpaceDock
 
 ## 2. Keep identifier stable
 
