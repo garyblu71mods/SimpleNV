@@ -1,5 +1,4 @@
 using System;
-using TUFX;
 
 namespace UnityEngine.Rendering.PostProcessing
 {

@@ -2,9 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Linq;
-using TUFX;
 using System.Collections.Generic;
-using Log = KSPBuildTools.Log;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
@@ -123,13 +121,42 @@ namespace UnityEngine.Rendering.PostProcessing
 
         #region REGION - Custom Load and Save methods and utility functions
 
+        // The night-vision renderer must not compile or reference TUFX.Utils.
+        // These helpers replace the few ConfigNode extensions used by the
+        // upstream TUFX-derived PostProcessing source.
+        private static string ReadString(ConfigNode node, string name)
+        {
+            return node.GetValue(name) ?? string.Empty;
+        }
+
+        private static bool ReadBool(ConfigNode node, string name)
+        {
+            bool value;
+            return bool.TryParse(ReadString(node, name), out value) && value;
+        }
+
+        private static float ReadFloat(ConfigNode node, string name)
+        {
+            float value;
+            return float.TryParse(ReadString(node, name), out value) ? value : 0f;
+        }
+
+        private static float[] ParseFloatArray(string value)
+        {
+            string[] parts = value.Split(',');
+            float[] result = new float[parts.Length];
+            for (int i = 0; i < parts.Length; ++i)
+                float.TryParse(parts[i], out result[i]);
+            return result;
+        }
+
         public abstract void Load(ConfigNode config);
 
         public abstract void Save(ConfigNode config);
 
         internal void loadBoolParameter(ConfigNode node, string name, ParameterOverride<bool> param)
         {
-            if (node.HasValue(name)) { param.Override(node.GetBoolValue(name)); }
+            if (node.HasValue(name)) { param.Override(ReadBool(node, name)); }
         }
 
         internal void loadIntParameter(ConfigNode node, string name, ParameterOverride<int> param)
@@ -143,14 +170,14 @@ namespace UnityEngine.Rendering.PostProcessing
 
         internal void loadFloatParameter(ConfigNode node, string name, ParameterOverride<float> param)
         {
-            if (node.HasValue(name)) { param.Override(node.GetFloatValue(name)); }
+            if (node.HasValue(name)) { param.Override(ReadFloat(node, name)); }
         }
 
         internal void loadEnumParameter<T>(ConfigNode node, string name, ParameterOverride<T> param, Type enumType)
         {
             if (node.HasValue(name))
             {
-                param.Override((T)Enum.Parse(enumType, node.GetStringValue(name)));
+                param.Override((T)Enum.Parse(enumType, ReadString(node, name)));
             }
         }
 
@@ -162,18 +189,14 @@ namespace UnityEngine.Rendering.PostProcessing
             {
                 return;
             }
-            string texName = node.GetStringValue(name);
+            string texName = ReadString(node, name);
 
             Texture2D texture = null;
-            if (texName.StartsWith(BUILTIN_PREFIX))
-            {
-                texName = texName.Substring(BUILTIN_PREFIX.Length);
-                texture = TexturesUnlimitedFXLoader.INSTANCE.getTexture(texName);
-            }
-            else
-            {
+            // The old TUFX loader provided its own built-in texture collection.
+            // SimpleNV never uses those profile textures. Skip them safely rather
+            // than booting a duplicate TUFX loader in this assembly.
+            if (!texName.StartsWith(BUILTIN_PREFIX, StringComparison.Ordinal))
                 texture = GameDatabase.Instance.GetTexture(texName, false);
-            }
             if (texture != null)
             {
                 param.Override(texture);
@@ -201,12 +224,9 @@ namespace UnityEngine.Rendering.PostProcessing
 
         internal void loadSplineParameter(ConfigNode node, string name, ParameterOverride<Spline> param)
         {
-            Log.Debug("Loading spline for: " + GetType() + " with name: " + name);
             ConfigNode splineNode = node.GetNode("SPLINE", "name", name);
-            Log.Debug("Node: " + splineNode);
             if (splineNode == null)
             {
-                Log.Debug("Node was null...");
                 return;
             }
             string[] keys = splineNode.GetValues("key");
@@ -214,13 +234,13 @@ namespace UnityEngine.Rendering.PostProcessing
             int len = keys.Length;
             for (int i = 0; i < len; i++)
             {
-                float[] vals = Utils.safeParseFloatArray(keys[i]);
+                float[] vals = ParseFloatArray(keys[i]);
                 Keyframe frame = new Keyframe(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
                 frames.Add(frame);
             }
             frames.Sort((a, b) => { return a.time.CompareTo(b.time); });
-            float zero = splineNode.GetFloatValue("zero");
-            bool loop = splineNode.GetBoolValue("loop");
+            float zero = ReadFloat(splineNode, "zero");
+            bool loop = ReadBool(splineNode, "loop");
             Spline spline = new Spline(new AnimationCurve(frames.ToArray()), zero, loop, new Vector2(0f, 1f));
             param.Override(spline);
         }
@@ -245,15 +265,12 @@ namespace UnityEngine.Rendering.PostProcessing
             if (!param.overrideState || param.value == null ) { return; }
             Texture2D tex = (Texture2D)param.value;
             string texName = string.Empty;
-            if (TexturesUnlimitedFXLoader.INSTANCE.isBuiltinTexture(tex))
-            {
-                texName = "BUILTIN:" + tex.name;
-            }
-            else
-            {
-                GameDatabase.TextureInfo info = GameDatabase.Instance.databaseTexture.FirstOrDefault(m => m.texture == tex);
-                texName = info.file.url;
-            }
+            // Only GameDatabase textures can be serialized without the TUFX
+            // texture manager. Skip non-database textures rather than crashing.
+            GameDatabase.TextureInfo info = GameDatabase.Instance.databaseTexture.FirstOrDefault(m => m.texture == tex);
+            if (info == null || info.file == null)
+                return;
+            texName = info.file.url;
             node.SetValue(name, texName, true);
         }
 

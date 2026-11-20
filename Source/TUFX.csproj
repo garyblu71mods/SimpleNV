@@ -1,5 +1,16 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile only the night vision controller and required PostProcessing source.
+       Including TUFXGameSettings here registers duplicate KSP game parameters
+       and can overwrite a profile selected in the real TUFX assembly. -->
+  <PropertyGroup>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="KerbVisionIR.cs" />
+    <Compile Include="PostProcessing\**\*.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
   <Import Project="KerbVisionIR.version.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
@@ -40,7 +51,6 @@
     </None>
     <None Include="PostProcessing\.editorconfig" />
     <None Include="PostProcessing\Unity.Postprocessing.Runtime.asmdef" />
-    <None Include="KerbVisionIR.csproj.user" />
   </ItemGroup>
   <ItemGroup>
     <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />

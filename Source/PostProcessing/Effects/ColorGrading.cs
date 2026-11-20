@@ -1,5 +1,4 @@
 using System;
-using TUFX;
 using UnityEngine.Experimental.Rendering;
 
 namespace UnityEngine.Rendering.PostProcessing
@@ -390,11 +389,24 @@ namespace UnityEngine.Rendering.PostProcessing
             return enabled.value;
         }
 
+        // ConfigNode.GetEnumValue was an extension method provided by TUFX.Utils.
+        // SimpleNV must not depend on TUFX just to deserialize these enum fields.
+        // Preserve the original Enum.Parse behavior (case-sensitive, default on invalid value).
+        private static T ReadEnumValue<T>(ConfigNode config, string key, T defaultValue) where T : struct
+        {
+            string value = config.GetValue(key);
+            if (string.IsNullOrEmpty(value))
+                return defaultValue;
+
+            T parsed;
+            return Enum.TryParse<T>(value, false, out parsed) ? parsed : defaultValue;
+        }
+
         public override void Load(ConfigNode config)
         {
-            if (config.HasValue("GradingMode")) { gradingMode.Override(config.GetEnumValue<GradingMode>("GradingMode", GradingMode.HighDefinitionRange)); }
+            if (config.HasValue("GradingMode")) { gradingMode.Override(ReadEnumValue(config, "GradingMode", GradingMode.HighDefinitionRange)); }
             loadTextureParameter(config, "ExternalLut", externalLut);
-            if (config.HasValue("Tonemapper")) { tonemapper.Override(config.GetEnumValue<Tonemapper>("Tonemapper", Tonemapper.None)); }
+            if (config.HasValue("Tonemapper")) { tonemapper.Override(ReadEnumValue(config, "Tonemapper", Tonemapper.None)); }
             loadFloatParameter(config, "ToneCurveToeStrength", toneCurveToeStrength);
             loadFloatParameter(config, "ToneCurveToeLength", toneCurveToeLength);
             loadFloatParameter(config, "ToneCurveShoulderStrength", toneCurveShoulderStrength);

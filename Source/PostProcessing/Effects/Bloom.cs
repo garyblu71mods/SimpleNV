@@ -1,6 +1,5 @@
 using System;
 using UnityEngine.Serialization;
-using TUFX;
 
 namespace UnityEngine.Rendering.PostProcessing
 {

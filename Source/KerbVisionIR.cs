@@ -21,6 +21,8 @@ namespace KerbVisionIR
 
         // PostProcessing components
         private PostProcessLayer layer;
+        // Tracks only components added by this controller, never TUFX's layer.
+        private readonly HashSet<PostProcessLayer> ownedLayers = new HashSet<PostProcessLayer>();
         private PostProcessVolume volume;
         private PostProcessVolume tintVolume;
         private PostProcessProfile profile;
@@ -476,6 +478,15 @@ namespace KerbVisionIR
 
             Camera.onPostRender -= OnCameraPostRender;
 
+            // Destroy only the layers created by SimpleNV. Never touch TUFX.
+            foreach (PostProcessLayer ownedLayer in ownedLayers)
+            {
+                if (ownedLayer != null)
+                    Destroy(ownedLayer);
+            }
+            ownedLayers.Clear();
+            layer = null;
+
             // Destroy PostProcessing objects
             if (volume != null)
                 Destroy(volume.gameObject);
@@ -565,24 +576,15 @@ namespace KerbVisionIR
                 return;
             }
 
-            // Get or create PostProcessLayer
-            layer = mainCamera.GetComponent<PostProcessLayer>();
+            // Keep our PostProcessLayer separate from TUFX's. It starts disabled
+            // and is enabled only while NV is active.
+            layer = CreateOwnedCameraLayer(mainCamera);
             if (layer == null)
             {
-                layer = mainCamera.gameObject.AddComponent<PostProcessLayer>();
-                layer.Init(runtimeResources);
-                layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
-                layer.stopNaNPropagation = true;
-                Debug.Log("[KerbVisionIR] Created PostProcessLayer");
+                postProcessingAvailable = false;
+                Debug.LogWarning("[KerbVisionIR] An unmanaged PostProcessLayer exists on the camera. Falling back safely.");
+                return;
             }
-            else
-            {
-                layer.Init(runtimeResources);
-                Debug.Log("[KerbVisionIR] Using existing PostProcessLayer");
-            }
-
-            layer.enabled = true;
-            layer.volumeLayer = 1 << EffectLayer;
 
             // Create global PostProcessVolume
             GameObject volumeGO = new GameObject("KerbVisionIR_PostProcessVolume");
@@ -897,6 +899,9 @@ namespace KerbVisionIR
         {
             StoreLighting();
 
+            if (postProcessingAvailable)
+                EnsureActiveCameraLayer();
+
             if (!postProcessingAvailable)
             {
                 ApplyBrightnessBoost();
@@ -999,6 +1004,7 @@ namespace KerbVisionIR
 
         void DisableEffect()
         {
+            SetOwnedLayerEnabled(false);
             if (postProcessingAvailable && vignette != null && colorGrading != null)
             {
                 vignette.intensity.Override(0f);
@@ -1454,6 +1460,46 @@ namespace KerbVisionIR
             return Camera.main;
         }
 
+        PostProcessLayer CreateOwnedCameraLayer(Camera camera)
+        {
+            if (camera == null || runtimeResources == null)
+                return null;
+
+            // The TUFX layer lives in another assembly; GetComponent<T> will
+            // not return it. Do not reinitialize a layer of our own type unless
+            // this controller created it.
+            PostProcessLayer existing = camera.GetComponent<PostProcessLayer>();
+            if (existing != null)
+            {
+                if (ownedLayers.Contains(existing))
+                    return existing;
+                return null;
+            }
+
+            PostProcessLayer created = camera.gameObject.AddComponent<PostProcessLayer>();
+            if (created == null)
+                return null;
+
+            created.Init(runtimeResources);
+            created.antialiasingMode = PostProcessLayer.Antialiasing.None;
+            created.stopNaNPropagation = true;
+            created.volumeLayer = 1 << EffectLayer;
+            created.enabled = false;
+            ownedLayers.Add(created);
+            Debug.Log($"[KerbVisionIR] Created owned PostProcessLayer on {camera.name}");
+            return created;
+        }
+
+        void SetOwnedLayerEnabled(bool enabled)
+        {
+            // Never enable orphaned layers or alter any component owned by TUFX.
+            foreach (PostProcessLayer ownedLayer in ownedLayers)
+            {
+                if (ownedLayer != null)
+                    ownedLayer.enabled = enabled && ownedLayer == layer;
+            }
+        }
+
         void EnsureActiveCameraLayer()
         {
             if (!postProcessingAvailable)
@@ -1461,32 +1507,29 @@ namespace KerbVisionIR
 
             Camera activeCamera = GetActiveCamera();
             if (activeCamera == null)
-                return;
-
-            if (targetCamera == activeCamera && layer != null)
             {
-                layer.enabled = true;
-                layer.volumeLayer = 1 << EffectLayer;
+                SetOwnedLayerEnabled(false);
                 return;
             }
 
-            targetCamera = activeCamera;
-            layer = activeCamera.GetComponent<PostProcessLayer>();
-            if (layer == null)
+            if (targetCamera != activeCamera || layer == null)
             {
-                layer = activeCamera.gameObject.AddComponent<PostProcessLayer>();
-                layer.Init(runtimeResources);
-                layer.antialiasingMode = PostProcessLayer.Antialiasing.None;
-                layer.stopNaNPropagation = true;
-                Debug.Log($"[KerbVisionIR] Added PostProcessLayer to active camera: {activeCamera.name}");
-            }
-            else
-            {
-                layer.Init(runtimeResources);
+                // A destroyed Flight camera must not retain our image effect.
+                if (layer != null && ownedLayers.Remove(layer))
+                    Destroy(layer);
+
+                targetCamera = activeCamera;
+                layer = CreateOwnedCameraLayer(activeCamera);
+                if (layer == null)
+                {
+                    SetOwnedLayerEnabled(false);
+                    postProcessingAvailable = false;
+                    Debug.LogWarning("[KerbVisionIR] Camera layer unavailable; switching to fallback overlay.");
+                    return;
+                }
             }
 
-            layer.enabled = true;
-            layer.volumeLayer = 1 << EffectLayer;
+            SetOwnedLayerEnabled(isEffectActive && !MapView.MapIsEnabled);
         }
 
         #endregion
